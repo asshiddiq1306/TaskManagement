@@ -1,0 +1,556 @@
+﻿@page "/tasks"
+@using TaskManagement.Web.Services
+@using TaskManagement.Application.DTOs
+@using TaskManagement.Domain.Enums
+@using TaskStatus = TaskManagement.Domain.Enums.TaskStatus
+@inject TaskApiService TaskApi
+@inject UserApiService UserApi
+@inject IJSRuntime JSRuntime
+@rendermode InteractiveServer
+
+<PageTitle>Tasks - Task Management</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Tasks Management</h1>
+    <button class="btn btn-primary" @onclick="OpenCreateModal">
+        <i class="bi bi-plus-circle"></i> Create New Task
+    </button>
+</div>
+
+@if (isLoading)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <!-- Filter Controls -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label class="form-label">Filter by Status:</label>
+                    <select class="form-select" @bind="statusFilter" @bind:after="ApplyFilters">
+                        <option value="">All Statuses</option>
+                        <option value="1">Pending</option>
+                        <option value="2">In Progress</option>
+                        <option value="3">Completed</option>
+                        <option value="4">Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Filter by User:</label>
+                    <select class="form-select" @bind="userFilter" @bind:after="ApplyFilters">
+                        <option value="">All Users</option>
+                        @foreach (var user in users)
+                        {
+                            <option value="@user.Id">@user.Name</option>
+                        }
+                        <option value="unassigned">Unassigned</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Search:</label>
+                    <input type="text" class="form-control" placeholder="Search tasks..." @bind="searchTerm" @oninput="OnSearchChanged" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary" @onclick="ClearFilters">
+                        <i class="bi bi-arrow-clockwise"></i> Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tasks Table -->
+    <div class="card">
+        <div class="card-body">
+            @if (filteredTasks.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Description</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th>Assigned To</th>
+                                <th>Due Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var task in filteredTasks)
+                            {
+                                <tr class="@(task.IsOverdue ? "table-warning" : "")">
+                                    <td>
+                                        <strong>@task.Title</strong>
+                                        @if (task.IsOverdue)
+                                        {
+                                            <span class="badge bg-danger ms-2">Overdue</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="text-muted">@(task.Description.Length > 50 ? task.Description.Substring(0, 50) + "..." : task.Description)</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge @GetPriorityBadgeClass(task.Priority)">
+                                            @task.Priority
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm @GetStatusButtonClass(task.Status)"
+                                                    @onclick="() => OpenStatusModal(task)">
+                                                @task.Status
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (task.AssignedUserId.HasValue)
+                                        {
+                                            <span class="badge bg-info">@task.AssignedUserName</span>
+                                            <button class="btn btn-sm btn-outline-secondary ms-1"
+                                                    @onclick="() => UnassignTask(task.Id)"
+                                                    title="Unassign">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="() => OpenAssignModal(task)"
+                                                    title="Assign User">
+                                                <i class="bi bi-person-plus"></i> Assign
+                                            </button>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (task.DueDate.HasValue)
+                                        {
+                                            <span class="@(task.IsOverdue ? "text-danger" : "text-muted")">
+                                                @task.DueDate.Value.ToString("MMM dd, yyyy")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No due date</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    @onclick="() => OpenEditModal(task)"
+                                                    title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => DeleteTask(task)"
+                                                    disabled="@(!task.CanBeDeleted)"
+                                                    title="@(task.CanBeDeleted ? "Delete" : "Cannot delete task in progress")">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                    <h4 class="mt-3 text-muted">No tasks found</h4>
+                    <p class="text-muted">@(tasks.Any() ? "Try adjusting your filters" : "Create your first task to get started")</p>
+                    @if (!tasks.Any())
+                    {
+                        <button class="btn btn-primary" @onclick="OpenCreateModal">
+                            <i class="bi bi-plus-circle"></i> Create First Task
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Modal Components -->
+<TaskCreateModal IsVisible="showCreateModal" 
+                 IsProcessing="isProcessing"
+                 Users="users"
+                 TaskModel="createTaskModel"
+                 OnClose="CloseCreateModal"
+                 OnSubmit="HandleCreateTask" />
+
+<TaskEditModal IsVisible="showEditModal"
+               IsProcessing="isProcessing"
+               TaskModel="updateTaskModel"
+               OnClose="CloseEditModal"
+               OnSubmit="HandleUpdateTask" />
+
+<TaskStatusModal IsVisible="showStatusModal"
+                 IsProcessing="isProcessing"
+                 Task="selectedTask"
+                 OnClose="CloseStatusModal"
+                 OnSubmit="HandleStatusUpdate" />
+
+<TaskAssignModal IsVisible="showAssignModal"
+                 IsProcessing="isProcessing"
+                 Task="selectedTask"
+                 Users="users"
+                 OnClose="CloseAssignModal"
+                 OnSubmit="HandleAssignTask" />
+
+<!-- Success/Error Messages -->
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1200;">
+        <div class="toast show" role="alert">
+            <div class="toast-header">
+                <i class="bi @(isSuccess ? "bi-check-circle text-success" : "bi-exclamation-triangle text-danger")"></i>
+                <strong class="me-auto ms-2">@(isSuccess ? "Success" : "Error")</strong>
+                <button type="button" class="btn-close" @onclick="ClearMessage"></button>
+            </div>
+            <div class="toast-body">
+                @message
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TaskResponseDto> tasks = new();
+    private List<TaskResponseDto> filteredTasks = new();
+    private List<UserResponseDto> users = new();
+    private bool isLoading = true;
+    private string message = string.Empty;
+    private bool isSuccess = false;
+    private string searchTerm = string.Empty;
+    private string statusFilter = string.Empty;
+    private string userFilter = string.Empty;
+
+    // Modal states
+    private bool showCreateModal = false;
+    private bool showEditModal = false;
+    private bool showStatusModal = false;
+    private bool showAssignModal = false;
+    private bool isProcessing = false;
+
+    // Task models
+    private CreateTaskDto createTaskModel = new();
+    private UpdateTaskDto updateTaskModel = new();
+    private TaskResponseDto? selectedTask;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        try
+        {
+            tasks = await TaskApi.GetAllTasksAsync();
+            users = await UserApi.GetAllUsersAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error loading data: {ex.Message}", false);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        filteredTasks = tasks.ToList();
+
+        // Status filter
+        if (!string.IsNullOrEmpty(statusFilter) && int.TryParse(statusFilter, out var statusValue))
+        {
+            filteredTasks = filteredTasks.Where(t => (int)t.Status == statusValue).ToList();
+        }
+
+        // User filter
+        if (!string.IsNullOrEmpty(userFilter))
+        {
+            if (userFilter == "unassigned")
+            {
+                filteredTasks = filteredTasks.Where(t => !t.AssignedUserId.HasValue).ToList();
+            }
+            else if (int.TryParse(userFilter, out var userId))
+            {
+                filteredTasks = filteredTasks.Where(t => t.AssignedUserId == userId).ToList();
+            }
+        }
+
+        // Search filter
+        if (!string.IsNullOrEmpty(searchTerm))
+        {
+            filteredTasks = filteredTasks.Where(t =>
+                t.Title.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                t.Description.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        searchTerm = string.Empty;
+        statusFilter = string.Empty;
+        userFilter = string.Empty;
+        ApplyFilters();
+    }
+
+    private string GetPriorityBadgeClass(TaskPriority priority)
+    {
+        return priority switch
+        {
+            TaskPriority.Low => "bg-secondary",
+            TaskPriority.Medium => "bg-primary",
+            TaskPriority.High => "bg-warning text-dark",
+            TaskPriority.Critical => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+    }
+
+    private string GetStatusButtonClass(TaskStatus status)
+    {
+        return status switch
+        {
+            TaskStatus.Pending => "btn-outline-warning",
+            TaskStatus.InProgress => "btn-outline-info",
+            TaskStatus.Completed => "btn-outline-success",
+            TaskStatus.Cancelled => "btn-outline-secondary",
+            _ => "btn-outline-light"
+        };
+    }
+
+    private void ShowMessage(string msg, bool success)
+    {
+        message = msg;
+        isSuccess = success;
+        StateHasChanged();
+
+        // Auto-hide after 3 seconds
+        _ = Task.Delay(3000).ContinueWith(_ =>
+        {
+            message = string.Empty;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void ClearMessage()
+    {
+        message = string.Empty;
+    }
+
+    // Create Modal Methods
+    private void OpenCreateModal()
+    {
+        createTaskModel = new CreateTaskDto { Priority = TaskPriority.Medium };
+        showCreateModal = true;
+    }
+
+    private void CloseCreateModal()
+    {
+        showCreateModal = false;
+        createTaskModel = new();
+    }
+
+    private async Task HandleCreateTask(CreateTaskDto model)
+    {
+        isProcessing = true;
+        try
+        {
+            var result = await TaskApi.CreateTaskAsync(model);
+            ShowMessage(result.Message, result.Success);
+
+            if (result.Success)
+            {
+                CloseCreateModal();
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", false);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    // Edit Modal Methods
+    private void OpenEditModal(TaskResponseDto task)
+    {
+        updateTaskModel = new UpdateTaskDto
+        {
+            Title = task.Title,
+            Description = task.Description,
+            DueDate = task.DueDate,
+            Priority = task.Priority
+        };
+        selectedTask = task;
+        showEditModal = true;
+    }
+
+    private void CloseEditModal()
+    {
+        showEditModal = false;
+        updateTaskModel = new();
+        selectedTask = null;
+    }
+
+    private async Task HandleUpdateTask(UpdateTaskDto model)
+    {
+        if (selectedTask == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var result = await TaskApi.UpdateTaskAsync(selectedTask.Id, model);
+            ShowMessage(result.Message, result.Success);
+
+            if (result.Success)
+            {
+                CloseEditModal();
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", false);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    // Status Modal Methods
+    private void OpenStatusModal(TaskResponseDto task)
+    {
+        selectedTask = task;
+        showStatusModal = true;
+    }
+
+    private void CloseStatusModal()
+    {
+        showStatusModal = false;
+        selectedTask = null;
+    }
+
+    private async Task HandleStatusUpdate(TaskStatus status)
+    {
+        if (selectedTask == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var result = await TaskApi.UpdateTaskStatusAsync(selectedTask.Id, status);
+            ShowMessage(result.Message, result.Success);
+
+            if (result.Success)
+            {
+                CloseStatusModal();
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", false);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    // Assign Modal Methods
+    private void OpenAssignModal(TaskResponseDto task)
+    {
+        selectedTask = task;
+        showAssignModal = true;
+    }
+
+    private void CloseAssignModal()
+    {
+        showAssignModal = false;
+        selectedTask = null;
+    }
+
+    private async Task HandleAssignTask(int userId)
+    {
+        if (selectedTask == null) return;
+
+        isProcessing = true;
+        try
+        {
+            var result = await TaskApi.AssignTaskAsync(selectedTask.Id, userId);
+            ShowMessage(result.Message, result.Success);
+
+            if (result.Success)
+            {
+                CloseAssignModal();
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", false);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task UnassignTask(int taskId)
+    {
+        var result = await TaskApi.UnassignTaskAsync(taskId);
+        ShowMessage(result.Message, result.Success);
+
+        if (result.Success)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task DeleteTask(TaskResponseDto task)
+    {
+        if (!task.CanBeDeleted)
+        {
+            ShowMessage("Cannot delete task that is in progress", false);
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete '{task.Title}'?");
+        if (confirmed)
+        {
+            var result = await TaskApi.DeleteTaskAsync(task.Id);
+            ShowMessage(result.Message, result.Success);
+
+            if (result.Success)
+            {
+                await LoadData();
+            }
+        }
+    }
+}

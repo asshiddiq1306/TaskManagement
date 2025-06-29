@@ -1,0 +1,206 @@
+﻿@page "/"
+@using TaskManagement.Web.Services
+@using TaskManagement.Application.DTOs
+@inject TaskApiService TaskApi
+@rendermode InteractiveServer
+
+<PageTitle>Dashboard - Task Management</PageTitle>
+
+<h1 class="mb-4">Dashboard</h1>
+
+@if (isLoading)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary mb-3">
+                <div class="card-header">
+                    <i class="bi bi-list-task"></i> Total Tasks
+                </div>
+                <div class="card-body">
+                    <h4 class="card-title">@totalTasks</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning mb-3">
+                <div class="card-header">
+                    <i class="bi bi-clock"></i> Pending
+                </div>
+                <div class="card-body">
+                    <h4 class="card-title">@pendingTasks</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info mb-3">
+                <div class="card-header">
+                    <i class="bi bi-arrow-right-circle"></i> In Progress
+                </div>
+                <div class="card-body">
+                    <h4 class="card-title">@inProgressTasks</h4>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success mb-3">
+                <div class="card-header">
+                    <i class="bi bi-check-circle"></i> Completed
+                </div>
+                <div class="card-body">
+                    <h4 class="card-title">@completedTasks</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-list"></i> Recent Tasks</h5>
+                </div>
+                <div class="card-body">
+                    @if (tasks.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var task in tasks.Take(5))
+                            {
+                                <div class="list-group-item">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">@task.Title</h6>
+                                        <span class="badge @GetStatusBadgeClass(task.Status)">@task.Status</span>
+                                    </div>
+                                    <p class="mb-1 text-muted">@task.Description</p>
+                                    @if (task.DueDate.HasValue)
+                                    {
+                                        <small class="@(task.IsOverdue ? "text-danger" : "text-muted")">
+                                            <i class="bi bi-calendar"></i> Due: @task.DueDate.Value.ToString("MMM dd, yyyy")
+                                        </small>
+                                    }
+                                    @if (!string.IsNullOrEmpty(task.AssignedUserName))
+                                    {
+                                        <small class="text-info ms-3">
+                                            <i class="bi bi-person"></i> @task.AssignedUserName
+                                        </small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="mt-3">
+                            <a href="/tasks" class="btn btn-outline-primary btn-sm">View All Tasks</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No tasks found.</p>
+                            <a href="/tasks" class="btn btn-primary btn-sm">Create First Task</a>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-exclamation-triangle text-danger"></i> Overdue Tasks</h5>
+                </div>
+                <div class="card-body">
+                    @if (overdueTasks.Any())
+                    {
+                        <div class="list-group">
+                            @foreach (var task in overdueTasks.Take(5))
+                            {
+                                <div class="list-group-item list-group-item-danger">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1">@task.Title</h6>
+                                        <span class="badge bg-danger">Overdue</span>
+                                    </div>
+                                    <small><i class="bi bi-calendar-x"></i> Due: @task.DueDate!.Value.ToString("MMM dd, yyyy")</small>
+                                    @if (!string.IsNullOrEmpty(task.AssignedUserName))
+                                    {
+                                        <small class="text-dark ms-3">
+                                            <i class="bi bi-person"></i> @task.AssignedUserName
+                                        </small>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="mt-3">
+                            <a href="/overdue" class="btn btn-outline-danger btn-sm">View All Overdue</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-success py-4">
+                            <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No overdue tasks! 🎉</p>
+                            <small class="text-muted">Great job staying on track!</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TaskResponseDto> tasks = new();
+    private List<TaskResponseDto> overdueTasks = new();
+    private int totalTasks = 0;
+    private int pendingTasks = 0;
+    private int inProgressTasks = 0;
+    private int completedTasks = 0;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+
+            tasks = await TaskApi.GetAllTasksAsync();
+            overdueTasks = await TaskApi.GetOverdueTasksAsync();
+
+            totalTasks = tasks.Count;
+            pendingTasks = tasks.Count(t => t.Status == Domain.Enums.TaskStatus.Pending);
+            inProgressTasks = tasks.Count(t => t.Status == Domain.Enums.TaskStatus.InProgress);
+            completedTasks = tasks.Count(t => t.Status == Domain.Enums.TaskStatus.Completed);
+        }
+        catch (Exception)
+        {
+            // Handle error - could show toast notification
+            totalTasks = 0;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string GetStatusBadgeClass(Domain.Enums.TaskStatus status)
+    {
+        return status switch
+        {
+            Domain.Enums.TaskStatus.Pending => "bg-warning text-dark",
+            Domain.Enums.TaskStatus.InProgress => "bg-info text-white",
+            Domain.Enums.TaskStatus.Completed => "bg-success text-white",
+            Domain.Enums.TaskStatus.Cancelled => "bg-secondary text-white",
+            _ => "bg-light text-dark"
+        };
+    }
+}

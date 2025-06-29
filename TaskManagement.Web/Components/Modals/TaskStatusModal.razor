@@ -1,0 +1,85 @@
+﻿@using TaskManagement.Application.DTOs
+@using TaskManagement.Domain.Enums
+@using TaskStatus = TaskManagement.Domain.Enums.TaskStatus
+
+@if (IsVisible && Task != null)
+{
+    <div class="modal show" style="display: block; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Task Status</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Task:</strong> @Task.Title</p>
+                    <p>
+                        <strong>Current Status:</strong>
+                        <span class="badge @GetStatusButtonClass(Task.Status)">@Task.Status</span>
+                    </p>
+
+                    <div class="mb-3">
+                        <label class="form-label">New Status</label>
+                        <select @bind="NewStatus" class="form-select">
+                            <option value="1">Pending</option>
+                            <option value="2">In Progress</option>
+                            <option value="3">Completed</option>
+                            <option value="4">Cancelled</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="HandleSubmit" disabled="@IsProcessing">
+                        @if (IsProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Update Status
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool IsProcessing { get; set; }
+    [Parameter] public TaskResponseDto? Task { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<TaskStatus> OnSubmit { get; set; }
+
+    private int NewStatus { get; set; } = 1;
+
+    protected override void OnParametersSet()
+    {
+        if (Task != null)
+        {
+            NewStatus = (int)Task.Status;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleSubmit()
+    {
+        var status = (TaskStatus)NewStatus;
+        await OnSubmit.InvokeAsync(status);
+    }
+
+    private string GetStatusButtonClass(TaskStatus status)
+    {
+        return status switch
+        {
+            TaskStatus.Pending => "btn-outline-warning",
+            TaskStatus.InProgress => "btn-outline-info",
+            TaskStatus.Completed => "btn-outline-success",
+            TaskStatus.Cancelled => "btn-outline-secondary",
+            _ => "btn-outline-light"
+        };
+    }
+}

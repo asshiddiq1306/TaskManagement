@@ -1,0 +1,111 @@
+﻿.task-details {
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+    animation: slideDown 0.3s ease-out;
+}
+
+    .task-details.collapsing {
+        animation: slideUp 0.3s ease-in;
+    }
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        max-height: 500px;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 1;
+        max-height: 500px;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+}
+
+.task-item {
+    transition: all 0.2s ease;
+    animation: fadeInUp 0.4s ease-out;
+}
+
+    .task-item:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.task-summary-wrapper {
+    display: inline-block;
+}
+
+.task-summary-button {
+    background: none !important;
+    border: none !important;
+    text-decoration: none !important;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+    .task-summary-button:hover {
+        background-color: rgba(0,0,0,0.05) !important;
+        transform: scale(1.02);
+    }
+
+    .task-summary-button:active {
+        transform: scale(0.98);
+    }
+
+    .task-summary-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+        .task-summary-button:disabled:hover {
+            background: none !important;
+            transform: none;
+        }
+
+.expand-icon {
+    transition: transform 0.3s ease;
+    display: flex;
+    align-items: center;
+}
+
+    .expand-icon.expanded {
+        transform: rotate(180deg);
+    }
+
+.badge {
+    transition: all 0.2s ease;
+    pointer-events: none;
+}
+
+.task-summary-button:hover .badge {
+    transform: scale(1.05);
+}

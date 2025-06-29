@@ -1,0 +1,95 @@
+﻿@using TaskManagement.Application.DTOs
+@using TaskManagement.Domain.Enums
+
+@if (IsVisible)
+{
+    <div class="modal show" style="display: block; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Task</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <EditForm Model="TaskModel" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label">Title *</label>
+                            <InputText @bind-Value="TaskModel.Title" class="form-control" placeholder="Enter task title" />
+                            <ValidationMessage For="() => TaskModel.Title" class="text-danger" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <InputTextArea @bind-Value="TaskModel.Description" class="form-control" rows="4" placeholder="Enter task description" />
+                            <ValidationMessage For="() => TaskModel.Description" class="text-danger" />
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Priority *</label>
+                                    <InputSelect @bind-Value="TaskModel.Priority" class="form-select">
+                                        <option value="@TaskPriority.Low">Low</option>
+                                        <option value="@TaskPriority.Medium">Medium</option>
+                                        <option value="@TaskPriority.High">High</option>
+                                        <option value="@TaskPriority.Critical">Critical</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="() => TaskModel.Priority" class="text-danger" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Due Date</label>
+                                    <InputDate @bind-Value="TaskModel.DueDate" class="form-control" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Assign to User</label>
+                            <InputSelect @bind-Value="TaskModel.AssignedUserId" class="form-select">
+                                <option value="">Select user (optional)</option>
+                                @foreach (var user in Users)
+                                {
+                                    <option value="@user.Id">@user.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" disabled="@IsProcessing">
+                                @if (IsProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2"></span>
+                                }
+                                Create Task
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool IsProcessing { get; set; }
+    [Parameter] public List<UserResponseDto> Users { get; set; } = new();
+    [Parameter] public CreateTaskDto TaskModel { get; set; } = new();
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<CreateTaskDto> OnSubmit { get; set; }
+
+    private async Task CloseModal()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleSubmit()
+    {
+        await OnSubmit.InvokeAsync(TaskModel);
+    }
+}

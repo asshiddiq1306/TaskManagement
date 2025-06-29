@@ -1,0 +1,72 @@
+﻿@using TaskManagement.Application.DTOs
+
+@if (IsVisible && Task != null)
+{
+    <div class="modal show" style="display: block; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Assign Task to User</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>Task:</strong> @Task.Title</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">Select User</label>
+                        <select @bind="SelectedUserId" class="form-select">
+                            <option value="">Select a user</option>
+                            @foreach (var user in Users)
+                            {
+                                <option value="@user.Id">@user.Name (@user.Email)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="HandleSubmit" disabled="@(IsProcessing || string.IsNullOrEmpty(SelectedUserId))">
+                        @if (IsProcessing)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                        }
+                        Assign Task
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool IsProcessing { get; set; }
+    [Parameter] public TaskResponseDto? Task { get; set; }
+    [Parameter] public List<UserResponseDto> Users { get; set; } = new();
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<int> OnSubmit { get; set; }
+
+    private string SelectedUserId { get; set; } = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible)
+        {
+            SelectedUserId = string.Empty;
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        SelectedUserId = string.Empty;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (!string.IsNullOrEmpty(SelectedUserId) && int.TryParse(SelectedUserId, out var userId))
+        {
+            await OnSubmit.InvokeAsync(userId);
+        }
+    }
+}
